@@ -10,6 +10,8 @@ class EgbServiceSeeder extends Seeder
     public function run(): void
     {
         $services = [
+            // Service spécial pour le cadeau gratuit (DOIT être en premier pour avoir ID=1)
+            ['platform' => 'tiktok', 'service_type' => 'vues', 'label' => '1000 Vues TikTok (Cadeau)', 'quantity' => 1000, 'price_points' => 0, 'description' => 'Cadeau de bienvenue: 1000 vues TikTok gratuites', 'sort_order' => 0],
             // TikTok
             ['platform' => 'tiktok', 'service_type' => 'vues', 'label' => '5000 Vues TikTok', 'quantity' => 5000, 'price_points' => 500, 'description' => 'Obtenez 5000 vues sur votre vidéo TikTok', 'sort_order' => 1],
             ['platform' => 'tiktok', 'service_type' => 'commentaires', 'label' => '100 Commentaires TikTok', 'quantity' => 100, 'price_points' => 500, 'description' => 'Recevez 100 commentaires sur votre vidéo TikTok', 'sort_order' => 2],

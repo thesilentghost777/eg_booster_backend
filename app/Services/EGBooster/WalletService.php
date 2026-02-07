@@ -108,24 +108,28 @@ class WalletService
         // Marquer que le filleul a fait un dépôt
         $referral->update(['has_deposited' => true]);
 
-        // Le parrain avait reçu 1 point à l'inscription, on lui donne le complément (50 - 1 = 49)
-        $bonusDeposit = EgbSetting::get('referral_bonus_deposit', 50);
-        $bonusNoDeposit = EgbSetting::get('referral_bonus_no_deposit', 1);
-        $complement = $bonusDeposit - $bonusNoDeposit;
+        // Récupérer le parrain
+        $referrer = EgbUser::find($user->referred_by);
+        if (!$referrer) return;
 
-        if ($complement > 0) {
-            $referrer = EgbUser::find($user->referred_by);
-            if ($referrer) {
-                $this->credit(
-                    $referrer,
-                    $complement,
-                    'bonus_parrainage',
-                    "Bonus: {$user->prenom} a fait son premier dépôt",
-                    ['referred_id' => $user->id]
-                );
+        // Compter le nombre de filleuls ayant fait un dépôt
+        $referralsWithDeposit = \App\Models\EGBooster\EgbReferral::where('referrer_id', $referrer->id)
+            ->where('has_deposited', true)
+            ->count();
 
-                $referral->increment('points_earned', $complement);
-            }
+        // Créditer 1000 points si c'est le 5ème filleul qui dépose
+        if ($referralsWithDeposit == 5) {
+            $bonusAmount = EgbSetting::get('referral_bonus_fifth_deposit', 1000);
+
+            $this->credit(
+                $referrer,
+                $bonusAmount,
+                'bonus_parrainage',
+                "Bonus: 5ème filleul ({$user->prenom}) a fait son premier dépôt",
+                ['referred_id' => $user->id, 'milestone' => 5]
+            );
+
+            $referral->increment('points_earned', $bonusAmount);
         }
     }
 }

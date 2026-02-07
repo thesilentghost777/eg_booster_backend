@@ -176,6 +176,11 @@ class AuthController extends Controller
         ]);
     }
 
+    /**
+     * Formater les données utilisateur pour l'API
+     *
+     * MODIFIÉ : Ajout des champs is_admin et is_blocked
+     */
     private function formatUser(EgbUser $user): array
     {
         return [
@@ -187,6 +192,8 @@ class AuthController extends Controller
             'referral_code' => $user->referral_code,
             'free_views_claimed' => $user->free_views_claimed,
             'inscrit_le' => $user->created_at->format('d/m/Y H:i'),
+            'is_admin' => (bool) $user->is_admin,  // ✅ AJOUTÉ
+            'is_blocked' => (bool) $user->is_blocked,  // ✅ AJOUTÉ (bonus pour la sécurité)
         ];
     }
 }

@@ -4,16 +4,21 @@ namespace App\Http\Controllers\EGBooster\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\EGBooster\EgbTransaction;
+use App\Models\EGBooster\EgbPayment;
 use App\Services\EGBooster\WalletService;
+use App\Services\EGBooster\FreemopayService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class WalletController extends Controller
 {
     protected WalletService $walletService;
+    protected FreemopayService $freemopayService;
 
-    public function __construct(WalletService $walletService)
+    public function __construct(WalletService $walletService, FreemopayService $freemopayService)
     {
         $this->walletService = $walletService;
+        $this->freemopayService = $freemopayService;
     }
 
     /**
@@ -27,49 +32,107 @@ class WalletController extends Controller
             'success' => true,
             'data' => [
                 'points_balance' => $user->points_balance,
-                'equivalent_fcfa' => $user->points_balance, // 1 point = 1 FCFA
+                'equivalent_fcfa' => $user->points_balance,
             ],
         ]);
     }
 
     /**
-     * Effectuer un dépôt (via API de paiement)
+     * Initialiser un dépôt (via Freemopay)
      */
     public function deposit(Request $request)
     {
         $validated = $request->validate([
             'amount_fcfa' => 'required|integer|min:500',
             'payment_method' => 'required|in:momo,om',
-            'payment_reference' => 'nullable|string',
+            'phone_number' => 'required|string|regex:/^237[0-9]{9}$/', // Format: 237XXXXXXXXX
         ]);
 
         $user = $request->user();
+        $externalId = 'EGB-' . Str::uuid();
 
         try {
-            $transaction = $this->walletService->deposit(
-                $user,
+            // Créer l'enregistrement de paiement
+            $payment = EgbPayment::create([
+                'user_id' => $user->id,
+                'external_id' => $externalId,
+                'amount_fcfa' => $validated['amount_fcfa'],
+                'phone_number' => $validated['phone_number'],
+                'payment_method' => $validated['payment_method'],
+                'status' => 'pending',
+            ]);
+
+            // Initialiser le paiement avec Freemopay
+            $response = $this->freemopayService->initPayment(
+                $validated['phone_number'],
                 $validated['amount_fcfa'],
-                "Dépôt via {$this->getPaymentMethodLabel($validated['payment_method'])}",
-                [
-                    'payment_method' => $validated['payment_method'],
-                    'payment_reference' => $validated['payment_reference'] ?? null,
-                ]
+                $externalId,
+                "Dépôt EGBooster - {$validated['amount_fcfa']} FCFA"
             );
+
+            // Mettre à jour avec la référence Freemopay
+            $payment->update([
+                'freemopay_reference' => $response['reference'] ?? null,
+                'metadata' => $response,
+            ]);
 
             return response()->json([
                 'success' => true,
-                'message' => "Dépôt de {$validated['amount_fcfa']} FCFA effectué! +{$validated['amount_fcfa']} points 🎉",
+                'message' => "Paiement initié! Validez la demande sur votre téléphone ({$validated['phone_number']})",
                 'data' => [
-                    'transaction' => $this->formatTransaction($transaction),
-                    'new_balance' => $user->fresh()->points_balance,
+                    'payment_id' => $payment->id,
+                    'external_id' => $externalId,
+                    'freemopay_reference' => $response['reference'] ?? null,
+                    'status' => 'pending',
+                    'amount' => $validated['amount_fcfa'],
                 ],
             ]);
-        } catch (\InvalidArgumentException $e) {
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage(),
-            ], 400);
+                'message' => 'Erreur lors de l\'initialisation du paiement: ' . $e->getMessage(),
+            ], 500);
         }
+    }
+
+    /**
+     * Vérifier le statut d'un paiement
+     */
+    public function checkPaymentStatus(Request $request, $externalId)
+    {
+        $user = $request->user();
+
+        $payment = EgbPayment::where('external_id', $externalId)
+            ->where('user_id', $user->id)
+            ->firstOrFail();
+
+        if ($payment->freemopay_reference) {
+            try {
+                $status = $this->freemopayService->checkPaymentStatus($payment->freemopay_reference);
+
+                return response()->json([
+                    'success' => true,
+                    'data' => [
+                        'status' => $payment->status,
+                        'freemopay_status' => $status['status'] ?? null,
+                        'amount' => $payment->amount_fcfa,
+                    ],
+                ]);
+            } catch (\Exception $e) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Erreur lors de la vérification du statut',
+                ], 500);
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'status' => $payment->status,
+                'amount' => $payment->amount_fcfa,
+            ],
+        ]);
     }
 
     /**
@@ -129,15 +192,6 @@ class WalletController extends Controller
             'cadeau_bienvenue' => '🎁 Cadeau bienvenue',
             'participation_roue' => '🎡 Participation roue',
             default => $type,
-        };
-    }
-
-    private function getPaymentMethodLabel(string $method): string
-    {
-        return match ($method) {
-            'momo' => 'MTN Mobile Money',
-            'om' => 'Orange Money',
-            default => $method,
         };
     }
 }

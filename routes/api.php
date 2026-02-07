@@ -8,6 +8,7 @@ use App\Http\Controllers\EGBooster\Api\ReferralController;
 use App\Http\Controllers\EGBooster\Api\WheelController;
 use App\Http\Controllers\EGBooster\Api\TransferController;
 use App\Http\Controllers\EGBooster\Api\SupportController;
+use App\Http\Controllers\EGBooster\Api\WebhookController;
 use App\Http\Controllers\EGBooster\Admin\AdminController;
 use Illuminate\Support\Facades\Route;
 
@@ -24,6 +25,8 @@ use Illuminate\Support\Facades\Route;
 Route::get('test', function () {
     return response()->json(['message' => 'Test route is working']);
 });
+
+Route::post('webhook/freemopay', [WebhookController::class, 'freemopay'])->name('webhook.freemopay');
 
 Route::prefix('egbooster')->name('egbooster.')->group(function () {
 
@@ -89,6 +92,13 @@ Route::prefix('egbooster')->name('egbooster.')->group(function () {
         Route::post('support/tickets', [SupportController::class, 'store'])->name('support.store');
         Route::get('support/tickets/{reference}/messages', [SupportController::class, 'messages'])->name('support.messages');
         Route::post('support/tickets/{reference}/reply', [SupportController::class, 'reply'])->name('support.reply');
+
+        // Wallet
+    Route::get('wallet/balance', [WalletController::class, 'balance'])->name('wallet.balance');
+    Route::post('wallet/deposit', [WalletController::class, 'deposit'])->name('wallet.deposit');
+    Route::get('wallet/payment/{externalId}/status', [WalletController::class, 'checkPaymentStatus'])->name('wallet.payment.status');
+    Route::get('wallet/transactions', [WalletController::class, 'transactions'])->name('wallet.transactions');
+
     });
 
     // ============================
@@ -134,6 +144,3 @@ Route::prefix('egbooster')->name('egbooster.')->group(function () {
         Route::post('support/tickets/{reference}/close', [AdminController::class, 'closeTicket'])->name('support.close');
     });
 });
-
-
-Crée maintenant le frontend React PWA pour EG Booster avec les pages: Welcome (marketing), Inscription, Dashboard, Services, Portefeuille, Grande Roue et Parrainage sans oublier ls screen de l'admin

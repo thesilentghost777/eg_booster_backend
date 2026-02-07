@@ -21,25 +21,94 @@ class AdminController extends Controller
 
     public function dashboard()
     {
-        return response()->json([
-            'success' => true,
-            'data' => [
+        \Log::info('=== ADMIN DASHBOARD REQUEST ===');
+
+        try {
+            $stats = [
                 'total_users' => EgbUser::count(),
-                'active_users' => EgbUser::where('is_blocked', false)->count(),
-                'blocked_users' => EgbUser::where('is_blocked', true)->count(),
                 'total_orders' => EgbOrder::count(),
+                'total_deposits_fcfa' => EgbTransaction::where('type', 'depot')->sum('amount_fcfa'),
+                'points_in_circulation' => EgbUser::sum('points_balance'),
                 'pending_orders' => EgbOrder::where('status', 'en_attente')->count(),
                 'in_progress_orders' => EgbOrder::where('status', 'en_cours')->count(),
                 'completed_orders' => EgbOrder::where('status', 'termine')->count(),
-                'total_deposits_fcfa' => EgbTransaction::where('type', 'depot')->sum('amount_fcfa'),
-                'total_points_in_circulation' => EgbUser::sum('points_balance'),
                 'open_tickets' => EgbSupportTicket::where('status', '!=', 'ferme')->count(),
-                'recent_orders' => EgbOrder::with(['user:id,prenom,telephone', 'service:id,label,platform'])
-                    ->orderByDesc('created_at')
-                    ->limit(10)
-                    ->get(),
-            ],
-        ]);
+            ];
+
+            \Log::info('Stats calculated:', $stats);
+
+            $recentOrders = EgbOrder::with(['user:id,prenom,telephone', 'service:id,label,platform,service_type'])
+                ->orderByDesc('created_at')
+                ->limit(10)
+                ->get()
+                ->map(function ($order) {
+                    return [
+                        'id' => $order->id,
+                        'reference' => $order->reference,
+                        'service' => [
+                            'platform' => $order->service->platform,
+                            'label' => $order->service->label,
+                            'service_type' => $order->service->service_type,
+                        ],
+                        'link' => $order->link,
+                        'quantity' => $order->quantity,
+                        'points_spent' => $order->points_spent,
+                        'status' => $order->status,
+                        'status_label' => $this->getStatusLabel($order->status),
+                        'is_free_gift' => $order->is_free_gift,
+                        'created_at' => $order->created_at->format('d/m/Y H:i'),
+                        'user' => [
+                            'id' => $order->user->id,
+                            'prenom' => $order->user->prenom,
+                            'telephone' => $order->user->telephone,
+                        ],
+                    ];
+                });
+
+            \Log::info('Recent orders count:', ['count' => $recentOrders->count()]);
+
+            // Structure CORRIGÉE pour matcher l'interface DashboardStats et RecentOrder[]
+            $response = [
+                'success' => true,
+                'data' => [
+                    'stats' => $stats,
+                    'recent_orders' => $recentOrders->toArray(),
+                ],
+            ];
+
+            \Log::info('Response structure:', [
+                'has_success' => isset($response['success']),
+                'has_data' => isset($response['data']),
+                'has_stats' => isset($response['data']['stats']),
+                'has_recent_orders' => isset($response['data']['recent_orders']),
+            ]);
+
+            return response()->json($response);
+
+        } catch (\Exception $e) {
+            \Log::error('Dashboard error:', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur serveur: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    private function getStatusLabel($status)
+    {
+        return match($status) {
+            'en_attente' => 'En attente',
+            'en_cours' => 'En cours',
+            'termine' => 'Terminé',
+            'annule' => 'Annulé',
+            default => $status,
+        };
     }
 
     // ==================== ORDERS ====================
@@ -50,21 +119,72 @@ class AdminController extends Controller
         $query = EgbOrder::with(['user:id,prenom,telephone', 'service:id,label,platform,service_type'])
             ->orderByDesc('created_at');
 
-        if ($status) $query->where('status', $status);
+        if ($status) {
+            $query->where('status', $status);
+        }
+
+        $orders = $query->get()->map(function ($order) {
+            return [
+                'id' => $order->id,
+                'reference' => $order->reference,
+                'service' => [
+                    'platform' => $order->service->platform,
+                    'label' => $order->service->label,
+                    'service_type' => $order->service->service_type,
+                ],
+                'link' => $order->link,
+                'quantity' => $order->quantity,
+                'points_spent' => $order->points_spent,
+                'status' => $order->status,
+                'status_label' => $this->getStatusLabel($order->status),
+                'is_free_gift' => $order->is_free_gift,
+                'admin_notes' => $order->admin_notes,
+                'created_at' => $order->created_at->format('d/m/Y H:i'),
+                'user' => [
+                    'id' => $order->user->id,
+                    'prenom' => $order->user->prenom,
+                    'telephone' => $order->user->telephone,
+                ],
+            ];
+        });
 
         return response()->json([
             'success' => true,
-            'data' => $query->paginate(30),
+            'data' => $orders->toArray(),
         ]);
     }
 
     public function showOrder(int $id)
     {
-        $order = EgbOrder::with(['user', 'service'])->findOrFail($id);
+        $order = EgbOrder::with(['user:id,prenom,telephone', 'service:id,label,platform,service_type'])
+            ->findOrFail($id);
+
+        $orderData = [
+            'id' => $order->id,
+            'reference' => $order->reference,
+            'service' => [
+                'platform' => $order->service->platform,
+                'label' => $order->service->label,
+                'service_type' => $order->service->service_type,
+            ],
+            'link' => $order->link,
+            'quantity' => $order->quantity,
+            'points_spent' => $order->points_spent,
+            'status' => $order->status,
+            'status_label' => $this->getStatusLabel($order->status),
+            'is_free_gift' => $order->is_free_gift,
+            'admin_notes' => $order->admin_notes,
+            'created_at' => $order->created_at->format('d/m/Y H:i'),
+            'user' => [
+                'id' => $order->user->id,
+                'prenom' => $order->user->prenom,
+                'telephone' => $order->user->telephone,
+            ],
+        ];
 
         return response()->json([
             'success' => true,
-            'data' => $order,
+            'data' => $orderData,
         ]);
     }
 
@@ -83,7 +203,7 @@ class AdminController extends Controller
             $walletService->credit(
                 $order->user,
                 $order->points_spent,
-                'achat', // type remboursement
+                'achat',
                 "Remboursement commande #{$order->reference}",
                 ['order_id' => $order->id]
             );
@@ -94,10 +214,35 @@ class AdminController extends Controller
             'admin_notes' => $validated['admin_notes'] ?? $order->admin_notes,
         ]);
 
+        $order->load(['user:id,prenom,telephone', 'service:id,label,platform,service_type']);
+
+        $orderData = [
+            'id' => $order->id,
+            'reference' => $order->reference,
+            'service' => [
+                'platform' => $order->service->platform,
+                'label' => $order->service->label,
+                'service_type' => $order->service->service_type,
+            ],
+            'link' => $order->link,
+            'quantity' => $order->quantity,
+            'points_spent' => $order->points_spent,
+            'status' => $order->status,
+            'status_label' => $this->getStatusLabel($order->status),
+            'is_free_gift' => $order->is_free_gift,
+            'admin_notes' => $order->admin_notes,
+            'created_at' => $order->created_at->format('d/m/Y H:i'),
+            'user' => [
+                'id' => $order->user->id,
+                'prenom' => $order->user->prenom,
+                'telephone' => $order->user->telephone,
+            ],
+        ];
+
         return response()->json([
             'success' => true,
             'message' => 'Statut mis à jour.',
-            'data' => $order->fresh(),
+            'data' => $orderData,
         ]);
     }
 
@@ -108,13 +253,20 @@ class AdminController extends Controller
         $query = EgbUser::withCount(['orders', 'referrals'])
             ->orderByDesc('created_at');
 
-        if ($request->query('blocked')) {
-            $query->where('is_blocked', true);
+        if ($request->query('blocked') !== null) {
+            $query->where('is_blocked', $request->query('blocked') == '1');
         }
+
+        $paginatedData = $query->paginate(30);
 
         return response()->json([
             'success' => true,
-            'data' => $query->paginate(30),
+            'data' => $paginatedData->items(),
+            'pagination' => [
+                'current_page' => $paginatedData->currentPage(),
+                'last_page' => $paginatedData->lastPage(),
+                'total' => $paginatedData->total(),
+            ],
         ]);
     }
 
@@ -123,11 +275,49 @@ class AdminController extends Controller
         $user = EgbUser::withCount(['orders', 'referrals'])
             ->findOrFail($id);
 
-        $user->load(['orders' => fn($q) => $q->latest()->limit(10), 'orders.service:id,label,platform']);
+        $user->load([
+            'orders' => fn($q) => $q->with('service:id,label,platform,service_type')->latest()->limit(10)
+        ]);
+
+        $userData = [
+            'id' => $user->id,
+            'prenom' => $user->prenom,
+            'telephone' => $user->telephone,
+            'email' => $user->email,
+            'points_balance' => $user->points_balance,
+            'referral_code' => $user->referral_code,
+            'free_views_claimed' => $user->free_views_claimed,
+            'inscrit_le' => $user->created_at->format('d/m/Y H:i'),
+            'is_admin' => $user->is_admin ?? false,
+            'is_blocked' => $user->is_blocked ?? false,
+            'device_fingerprint' => $user->device_fingerprint,
+            'ip_address' => $user->ip_address,
+            'orders_count' => $user->orders_count,
+            'referrals_count' => $user->referrals_count,
+            'orders' => $user->orders->map(function ($order) {
+                return [
+                    'id' => $order->id,
+                    'reference' => $order->reference,
+                    'service' => [
+                        'platform' => $order->service->platform,
+                        'label' => $order->service->label,
+                        'service_type' => $order->service->service_type,
+                    ],
+                    'link' => $order->link,
+                    'quantity' => $order->quantity,
+                    'points_spent' => $order->points_spent,
+                    'status' => $order->status,
+                    'status_label' => $this->getStatusLabel($order->status),
+                    'is_free_gift' => $order->is_free_gift,
+                    'admin_notes' => $order->admin_notes,
+                    'created_at' => $order->created_at->format('d/m/Y H:i'),
+                ];
+            })->toArray(),
+        ];
 
         return response()->json([
             'success' => true,
-            'data' => $user,
+            'data' => $userData,
         ]);
     }
 
@@ -171,9 +361,11 @@ class AdminController extends Controller
 
     public function services()
     {
+        $services = EgbService::orderBy('platform')->orderBy('sort_order')->get();
+
         return response()->json([
             'success' => true,
-            'data' => EgbService::orderBy('platform')->orderBy('sort_order')->get(),
+            'data' => $services->toArray(),
         ]);
     }
 
@@ -194,7 +386,7 @@ class AdminController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Service créé.',
-            'data' => $service,
+            'data' => $service->toArray(),
         ], 201);
     }
 
@@ -216,7 +408,7 @@ class AdminController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Service mis à jour.',
-            'data' => $service->fresh(),
+            'data' => $service->fresh()->toArray(),
         ]);
     }
 
@@ -243,12 +435,19 @@ class AdminController extends Controller
 
     public function wheelEvents()
     {
+        $paginatedData = EgbWheelEvent::with('winner:id,prenom')
+            ->withCount('participations')
+            ->orderByDesc('scheduled_at')
+            ->paginate(20);
+
         return response()->json([
             'success' => true,
-            'data' => EgbWheelEvent::with('winner:id,prenom')
-                ->withCount('participations')
-                ->orderByDesc('scheduled_at')
-                ->paginate(20),
+            'data' => $paginatedData->items(),
+            'pagination' => [
+                'current_page' => $paginatedData->currentPage(),
+                'last_page' => $paginatedData->lastPage(),
+                'total' => $paginatedData->total(),
+            ],
         ]);
     }
 
@@ -267,7 +466,7 @@ class AdminController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Événement créé.',
-            'data' => $event,
+            'data' => $event->toArray(),
         ], 201);
     }
 
@@ -302,9 +501,11 @@ class AdminController extends Controller
 
     public function settings()
     {
+        $settings = EgbSetting::all()->groupBy('group');
+
         return response()->json([
             'success' => true,
-            'data' => EgbSetting::all()->groupBy('group'),
+            'data' => $settings->toArray(),
         ]);
     }
 
@@ -337,11 +538,20 @@ class AdminController extends Controller
         $query = EgbSupportTicket::with(['user:id,prenom,telephone', 'latestMessage'])
             ->orderByDesc('updated_at');
 
-        if ($status) $query->where('status', $status);
+        if ($status) {
+            $query->where('status', $status);
+        }
+
+        $paginatedData = $query->paginate(20);
 
         return response()->json([
             'success' => true,
-            'data' => $query->paginate(20),
+            'data' => $paginatedData->items(),
+            'pagination' => [
+                'current_page' => $paginatedData->currentPage(),
+                'last_page' => $paginatedData->lastPage(),
+                'total' => $paginatedData->total(),
+            ],
         ]);
     }
 
@@ -364,8 +574,8 @@ class AdminController extends Controller
         return response()->json([
             'success' => true,
             'data' => [
-                'ticket' => $ticket,
-                'messages' => $messages,
+                'ticket' => $ticket->toArray(),
+                'messages' => $messages->toArray(),
             ],
         ]);
     }

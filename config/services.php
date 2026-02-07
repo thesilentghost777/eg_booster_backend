@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'freemopay' => [
+    'base_url' => env('FREEMOPAY_BASE_URL', 'https://api-v2.freemopay.com'),
+    'app_key' => env('FREEMOPAY_APP_KEY'),
+    'secret_key' => env('FREEMOPAY_SECRET_KEY'),
+    'webhook_url' => env('FREEMOPAY_WEBHOOK_URL'),
+],
 ];

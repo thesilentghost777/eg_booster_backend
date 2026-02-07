@@ -2,9 +2,15 @@
 
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\EGBooster\PaymentAdminController;
 
 Route::get('/', function () {
     return view('welcome');
+});
+
+Route::prefix('egbooster/admin/payments')->group(function () {
+    Route::get('/', [PaymentAdminController::class, 'index'])->name('egb.payments.index');
+    Route::get('/{id}', [PaymentAdminController::class, 'show'])->name('egb.payments.show');
 });
 
 Route::get('/dashboard', function () {
