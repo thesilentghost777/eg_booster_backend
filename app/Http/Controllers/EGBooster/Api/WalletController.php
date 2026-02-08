@@ -43,7 +43,7 @@ class WalletController extends Controller
     public function deposit(Request $request)
     {
         $validated = $request->validate([
-            'amount_fcfa' => 'required|integer|min:500',
+            'amount_fcfa' => 'required|integer|min:200',
             'payment_method' => 'required|in:momo,om',
             'phone_number' => 'required|string|regex:/^237[0-9]{9}$/', // Format: 237XXXXXXXXX
         ]);

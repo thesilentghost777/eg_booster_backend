@@ -15,7 +15,7 @@ class WalletService
     public function deposit(EgbUser $user, int $amountFcfa, string $description = 'Dépôt', array $metadata = []): EgbTransaction
     {
         $minDeposit = EgbSetting::get('min_deposit_fcfa', 500);
-        if ($amountFcfa < $minDeposit) {
+        if ($amountFcfa < 200) {
             throw new \InvalidArgumentException("Le dépôt minimum est de {$minDeposit} FCFA.");
         }
 
