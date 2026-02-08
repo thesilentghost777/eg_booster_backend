@@ -183,22 +183,32 @@
                             </div>
                             <div class="text-center mb-4">
                                 <h3 class="text-lg font-semibold text-gray-900">
-                                    {{ $payment->user->name ?? 'N/A' }}
+                                    {{ $payment->user->prenom ?? 'N/A' }}
                                 </h3>
                                 <p class="text-sm text-gray-500">ID: {{ $payment->user_id }}</p>
                             </div>
                             @if($payment->user)
                                 <div class="space-y-3 pt-4 border-t border-gray-200">
-                                    @if(isset($payment->user->email))
+                                    @if($payment->user->email)
                                         <div class="flex items-center text-sm text-gray-600">
                                             <i class="fas fa-envelope w-5 text-gray-400"></i>
                                             <span class="ml-2">{{ $payment->user->email }}</span>
                                         </div>
                                     @endif
-                                    @if(isset($payment->user->phone))
+                                    @if($payment->user->telephone)
                                         <div class="flex items-center text-sm text-gray-600">
                                             <i class="fas fa-phone w-5 text-gray-400"></i>
-                                            <span class="ml-2">{{ $payment->user->phone }}</span>
+                                            <span class="ml-2">{{ $payment->user->telephone }}</span>
+                                        </div>
+                                    @endif
+                                    <div class="flex items-center text-sm text-gray-600">
+                                        <i class="fas fa-coins w-5 text-gray-400"></i>
+                                        <span class="ml-2">Solde: {{ number_format($payment->user->points_balance ?? 0, 0, ',', ' ') }} points</span>
+                                    </div>
+                                    @if($payment->user->referral_code)
+                                        <div class="flex items-center text-sm text-gray-600">
+                                            <i class="fas fa-share-alt w-5 text-gray-400"></i>
+                                            <span class="ml-2 font-mono">{{ $payment->user->referral_code }}</span>
                                         </div>
                                     @endif
                                 </div>

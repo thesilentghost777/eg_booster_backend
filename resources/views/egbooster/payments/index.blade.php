@@ -197,7 +197,7 @@
                                             </div>
                                             <div class="ml-3">
                                                 <div class="text-sm font-medium text-gray-900">
-                                                    {{ $payment->user->name ?? 'N/A' }}
+                                                    {{ $payment->user->prenom ?? 'N/A' }}
                                                 </div>
                                                 <div class="text-xs text-gray-500">ID: {{ $payment->user_id }}</div>
                                             </div>
