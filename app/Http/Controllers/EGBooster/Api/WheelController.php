@@ -18,7 +18,7 @@ class WheelController extends Controller
     /**
      * Événement actif (compte à rebours)
      */
-    public function current()
+    public function current(Request $request)
     {
         $event = $this->wheelService->getCurrentEvent();
 
@@ -30,6 +30,16 @@ class WheelController extends Controller
             ]);
         }
 
+        // ✅ CORRECTION: Vérifier si l'utilisateur actuel a participé
+        $user = $request->user();
+        $userHasParticipated = false;
+
+        if ($user) {
+            $userHasParticipated = $event->participations()
+                ->where('user_id', $user->id)
+                ->exists();
+        }
+
         return response()->json([
             'success' => true,
             'data' => [
@@ -39,6 +49,7 @@ class WheelController extends Controller
                 'participants_count' => $event->participations_count,
                 'status' => $event->status,
                 'countdown_seconds' => max(0, now()->diffInSeconds($event->scheduled_at, false)),
+                'user_has_participated' => $userHasParticipated, // ✅ AJOUTÉ
             ],
         ]);
     }
