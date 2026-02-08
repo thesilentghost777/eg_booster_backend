@@ -26,9 +26,10 @@ Route::get('test', function () {
     return response()->json(['message' => 'Test route is working']);
 });
 
-Route::post('webhook/freemopay', [WebhookController::class, 'freemopay'])->name('webhook.freemopay');
 
 Route::prefix('egbooster')->name('egbooster.')->group(function () {
+
+    Route::post('webhook/freemopay', [WebhookController::class, 'freemopay'])->name('webhook.freemopay');
 
     // ============================
     // ROUTES PUBLIQUES
